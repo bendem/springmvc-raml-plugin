@@ -110,7 +110,7 @@ public abstract class ResourceParser {
 	 * @return If true, the verb supports a payload in the request body
 	 */
 	public static boolean doesActionTypeSupportRequestBody(RamlActionType target) {
-		return target.equals(RamlActionType.POST) || target.equals(RamlActionType.PUT);
+		return target.equals(RamlActionType.POST) || target.equals(RamlActionType.PUT) || target.equals(RamlActionType.PATCH);
 	}
 	/**
 	 * Method to check if a specific action type supports multipart mime request
@@ -139,10 +139,6 @@ public abstract class ResourceParser {
 	 */
 	protected Map<String, RamlQueryParameter> extractQueryParameters(RamlActionType apiAction, Method method,
 																	 Map<String, String> parameterComments) {
-		// Since POST requests have a body we choose to keep all request data in one place as much as possible
-		if (apiAction.equals(RamlActionType.POST) || method.getParameterCount() == 0) {
-			return Collections.emptyMap();
-		}
 		Map<String, RamlQueryParameter> queryParams = new LinkedHashMap<>();
 
 		for (Parameter param : method.getParameters()) {

@@ -38,10 +38,7 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -139,6 +136,11 @@ public abstract class ResourceParser {
 	 */
 	protected Map<String, RamlQueryParameter> extractQueryParameters(RamlActionType apiAction, Method method,
 																	 Map<String, String> parameterComments) {
+		// Since POST requests have a body we choose to keep all request data in one place as much as possible
+		if (Arrays.asList(RamlActionType.POST, RamlActionType.PUT, RamlActionType.PATCH).contains(apiAction) || method.getParameterCount() == 0) {
+			return Collections.emptyMap();
+		}
+
 		Map<String, RamlQueryParameter> queryParams = new LinkedHashMap<>();
 
 		for (Parameter param : method.getParameters()) {

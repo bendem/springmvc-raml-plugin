@@ -15,7 +15,6 @@ package com.phoenixnap.oss.ramlapisync.data;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Parameter;
-import java.lang.reflect.Type;
 import java.util.List;
 
 import org.apache.commons.lang.NullArgumentException;
@@ -25,8 +24,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.phoenixnap.oss.ramlapisync.annotations.Example;
+import com.phoenixnap.oss.ramlapisync.naming.Reflection;
 import com.phoenixnap.oss.ramlapisync.naming.SchemaHelper;
-import com.phoenixnap.oss.ramlapisync.naming.TypeHelper;
 import com.phoenixnap.oss.ramlapisync.raml.RamlAbstractParam;
 import com.phoenixnap.oss.ramlapisync.raml.RamlUriParameter;
 
@@ -60,12 +59,7 @@ public class ApiParameterMetadata {
 	/**
 	 * The Java Type of the parameter
 	 */
-	private Class<?> type;
-
-	/**
-	 * If the type contains generics, this is the type of the generic as defined in the code.
-	 */
-	private Type genericType;
+	private Reflection.MaybeGenericClass<?> type;
 
 	/**
 	 * Can this parameter be passed in as null
@@ -122,17 +116,15 @@ public class ApiParameterMetadata {
 		this.name = name;
 		this.param = null; //we wont have this.
 		
-		this.type = SchemaHelper.mapSimpleType(param.getType());
+		this.type = new Reflection.NonGenericClass<>(SchemaHelper.mapSimpleType(param.getType()));
 		
 		//If it's a repeatable parameter simply convert to an array of type
 		if(param.isRepeat()) {
-			this.type = Array.newInstance(this.type, 0).getClass();
+			this.type = new Reflection.NonGenericClass<>(Array.newInstance(this.type.getMaybeGenericClass(), 0).getClass());
 		}
-		
-		this.genericType = null;
 
 		this.example = StringUtils.hasText(param.getExample()) ? param.getExample() : null;
-		this.setRamlParam(param);
+		this.ramlParam = param;
 	}
 
 	/**
@@ -140,7 +132,7 @@ public class ApiParameterMetadata {
 	 * 
 	 * @param param Java Parameter representation
 	 */
-	public ApiParameterMetadata(Parameter param) {
+	public ApiParameterMetadata(Class<?> holder, Parameter param) {
 		super();
 		this.resourceId = false;
 		this.nullable = false;
@@ -165,15 +157,11 @@ public class ApiParameterMetadata {
 		RequestBody requestBody = param.getAnnotation(RequestBody.class);
 		if (requestBody != null) {
 			nullable = !requestBody.required();
-
 		}
 
 		this.name = resolveParameterName(annotatedName, param);
 		this.param = param;
-		if (param != null) {
-			this.type = param.getType();
-			this.genericType = TypeHelper.inferGenericType(param.getParameterizedType());
-		}
+		this.type = Reflection.resolve(holder, param.getParameterizedType());
 
 		Example parameterExample = param.getAnnotation(Example.class);
 		if (parameterExample != null && StringUtils.hasText(parameterExample.value())) {
@@ -186,17 +174,8 @@ public class ApiParameterMetadata {
 	 * 
 	 * @return The Java Type of the parameter
 	 */
-	public Class<?> getType() {
+	public Reflection.MaybeGenericClass<?> getType() {
 		return type;
-	}
-
-	/**
-	 * The Java Type of the generic portion of the parameter
-	 * 
-	 * @return The Java Type of the generic portion of the parameter
-	 */
-	public Type getGenericType() {
-		return genericType;
 	}
 
 	/**
@@ -265,11 +244,6 @@ public class ApiParameterMetadata {
 		return ramlParam;
 	}
 
-	private void setRamlParam(RamlAbstractParam ramlParam) {
-		this.ramlParam = ramlParam;
-	}
-	
-
 	/**
 	 * Quick check to see if this is an array type or not
 	 * @return
@@ -278,7 +252,7 @@ public class ApiParameterMetadata {
 		if (type == null) {
 			return false;
 		}
-		return type.isArray() || List.class.isAssignableFrom(type);
+		return type.getMaybeGenericClass().isArray() || List.class.isAssignableFrom(type.getMaybeGenericClass());
 	}
 
 }

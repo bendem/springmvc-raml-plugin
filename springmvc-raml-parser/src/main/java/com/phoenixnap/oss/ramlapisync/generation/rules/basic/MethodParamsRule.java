@@ -12,21 +12,22 @@
  */
 package com.phoenixnap.oss.ramlapisync.generation.rules.basic;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.util.StringUtils;
+
 import com.phoenixnap.oss.ramlapisync.data.ApiActionMetadata;
 import com.phoenixnap.oss.ramlapisync.data.ApiParameterMetadata;
 import com.phoenixnap.oss.ramlapisync.generation.CodeModelHelper;
 import com.phoenixnap.oss.ramlapisync.generation.rules.Rule;
 import com.phoenixnap.oss.ramlapisync.naming.NamingHelper;
+import com.phoenixnap.oss.ramlapisync.naming.Reflection;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JVar;
-
-import org.springframework.http.HttpHeaders;
-import org.springframework.util.StringUtils;
-
-import java.util.ArrayList;
-import java.util.List;
 
 import static com.phoenixnap.oss.ramlapisync.generation.CodeModelHelper.findFirstClassBySimpleName;
 import static org.springframework.util.StringUtils.uncapitalize;
@@ -34,30 +35,30 @@ import static org.springframework.util.StringUtils.uncapitalize;
 /**
  * Generates all method parameters needed for an endpoint defined by ApiMappingMetadata.
  * This includes path variables, request parameters and the request body.
- *
+ * <p>
  * INPUT:
  * #%RAML 0.8
  * title: myapi
  * mediaType: application/json
  * baseUri: /
  * /base:
- *   /{id}/elements:
- *     get:
- *       queryParameters:
- *         requiredQueryParam:
- *           type: integer
- *           required: true
- *         optionalQueryParam:
- *           type: string
- *         optionalQueryParam2:
- *           type: number
- *           required: false
- *
+ * /{id}/elements:
+ * get:
+ * queryParameters:
+ * requiredQueryParam:
+ * type: integer
+ * required: true
+ * optionalQueryParam:
+ * type: string
+ * optionalQueryParam2:
+ * type: number
+ * required: false
+ * <p>
  * OUTPUT:
  * (String id
- *  , Integer requiredQueryParam
- *  , String optionalQueryParam
- *  , BigDecimal optionalQueryParam2
+ * , Integer requiredQueryParam
+ * , String optionalQueryParam
+ * , BigDecimal optionalQueryParam2
  * )
  *
  * @author armin.weisser
@@ -66,23 +67,23 @@ import static org.springframework.util.StringUtils.uncapitalize;
  */
 public class MethodParamsRule implements Rule<CodeModelHelper.JExtMethod, JMethod, ApiActionMetadata> {
 
-	boolean addParameterJavadoc = false;
-	boolean allowArrayParameters = true;
-	
-	public MethodParamsRule () {
-		this(false, true);
-	}
-	
-	/**
-	 * If set to true, the rule will also add a parameter javadoc entry
-	 * 
-	 * @param addParameterJavadoc Set to true for javadocs for parameters
-	 */
-	public MethodParamsRule (boolean addParameterJavadoc, boolean allowArrayParameters) {
-		this.addParameterJavadoc = addParameterJavadoc;
-		this.allowArrayParameters = allowArrayParameters;
-	}
-	
+    boolean addParameterJavadoc = false;
+    boolean allowArrayParameters = true;
+
+    public MethodParamsRule() {
+        this(false, true);
+    }
+
+    /**
+     * If set to true, the rule will also add a parameter javadoc entry
+     *
+     * @param addParameterJavadoc Set to true for javadocs for parameters
+     */
+    public MethodParamsRule(boolean addParameterJavadoc, boolean allowArrayParameters) {
+        this.addParameterJavadoc = addParameterJavadoc;
+        this.allowArrayParameters = allowArrayParameters;
+    }
+
     @Override
     public JMethod apply(ApiActionMetadata endpointMetadata, CodeModelHelper.JExtMethod generatableType) {
 
@@ -91,63 +92,63 @@ public class MethodParamsRule implements Rule<CodeModelHelper.JExtMethod, JMetho
         parameterMetadataList.addAll(endpointMetadata.getRequestParameters());
         parameterMetadataList.addAll(endpointMetadata.getRequestHeaders());
 
-        parameterMetadataList.forEach( paramMetaData -> {
-            paramQueryForm(paramMetaData, generatableType);
-        });
+        parameterMetadataList.forEach(paramMetaData -> paramQueryForm(paramMetaData, generatableType));
 
         if (endpointMetadata.getRequestBody() != null) {
             paramObjects(endpointMetadata, generatableType);
         }
 
-       if (endpointMetadata.getInjectHttpHeadersParameter()) {
+        if (endpointMetadata.getInjectHttpHeadersParameter()) {
             paramHttpHeaders(generatableType);
-       }
+        }
 
         return generatableType.get();
     }
 
-	protected JVar paramQueryForm(ApiParameterMetadata paramMetaData, CodeModelHelper.JExtMethod generatableType) {
-      String javaName = NamingHelper.getParameterName(paramMetaData.getName());
-    	if (addParameterJavadoc) {
-			String paramComment = "";
-			if (paramMetaData.getRamlParam() != null && StringUtils.hasText(paramMetaData.getRamlParam().getDescription())) {
-				 paramComment = NamingHelper.cleanForJavadoc(paramMetaData.getRamlParam().getDescription());
-			}
-	    	generatableType.get().javadoc().addParam(javaName + " " + paramComment);
-    	}
-    	Class<?> type = paramMetaData.getType();
-    	if (!allowArrayParameters && paramMetaData.isArray() ) {
-    		type = type.getComponentType();
-    	} else {
-    		
-    	}
-    	return generatableType.get().param(type, javaName);
+    protected JVar paramQueryForm(ApiParameterMetadata paramMetaData, CodeModelHelper.JExtMethod generatableType) {
+        String javaName = NamingHelper.getParameterName(paramMetaData.getName());
+        if (addParameterJavadoc) {
+            String paramComment = "";
+            if (paramMetaData.getRamlParam() != null && StringUtils.hasText(paramMetaData.getRamlParam().getDescription())) {
+                paramComment = NamingHelper.cleanForJavadoc(paramMetaData.getRamlParam().getDescription());
+            }
+            generatableType.get().javadoc().addParam(javaName + " " + paramComment);
+        }
+        Reflection.MaybeGenericClass<?> type = paramMetaData.getType();
+        if (!allowArrayParameters && paramMetaData.isArray()) {
+            if (type.getMaybeGenericClass().isArray()) {
+                type = new Reflection.NonGenericClass<>(type.getMaybeGenericClass().getComponentType());
+            } else {
+                type = ((Reflection.GenericClass<?>) type).getTypeParameters().get(0);
+            }
+        }
+        return generatableType.get().param(type.getMaybeGenericClass(), javaName);
     }
 
     protected JVar paramObjects(ApiActionMetadata endpointMetadata, CodeModelHelper.JExtMethod generatableType) {
         String requestBodyName = endpointMetadata.getRequestBody().getName();
         List<JCodeModel> codeModels = new ArrayList<>();
-        if (endpointMetadata.getRequestBody().getCodeModel()!=null){
+        if (endpointMetadata.getRequestBody().getCodeModel() != null) {
             codeModels.add(endpointMetadata.getRequestBody().getCodeModel());
         }
-        
-        if ( generatableType.owner()!=null){
+
+        if (generatableType.owner() != null) {
             codeModels.add(generatableType.owner());
         }
-                
+
         JClass requestBodyType = findFirstClassBySimpleName(codeModels.toArray(new JCodeModel[codeModels.size()]), requestBodyName);
         if (addParameterJavadoc) {
-        	generatableType.get().javadoc().addParam(uncapitalize(requestBodyName) + " The Request Body Payload");
+            generatableType.get().javadoc().addParam(uncapitalize(requestBodyName) + " The Request Body Payload");
         }
         return generatableType.get().param(requestBodyType, uncapitalize(requestBodyName));
     }
 
-   protected JVar paramHttpHeaders(CodeModelHelper.JExtMethod generatableType) {
-      JVar paramHttpHeaders = generatableType.get().param(HttpHeaders.class, "httpHeaders");
-      if (addParameterJavadoc) {
-          generatableType.get().javadoc().addParam("httpHeaders The HTTP headers for the request");
-      }
-      return paramHttpHeaders;
-   }
+    protected JVar paramHttpHeaders(CodeModelHelper.JExtMethod generatableType) {
+        JVar paramHttpHeaders = generatableType.get().param(HttpHeaders.class, "httpHeaders");
+        if (addParameterJavadoc) {
+            generatableType.get().javadoc().addParam("httpHeaders The HTTP headers for the request");
+        }
+        return paramHttpHeaders;
+    }
 
 }

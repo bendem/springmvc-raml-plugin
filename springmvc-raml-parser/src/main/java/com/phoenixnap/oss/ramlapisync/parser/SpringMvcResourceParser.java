@@ -81,7 +81,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 	}
 
 	@Override
-	protected Pair<String, RamlMimeType> extractRequestBody(Method method, Map<String, String> parameterComments,
+	protected Pair<String, RamlMimeType> extractRequestBody(Class<?> holder, Method method, Map<String, String> parameterComments,
 															String comment, List<ApiParameterMetadata> apiParameters) {
 		RamlMimeType mimeType = RamlModelFactoryOfFactories.createRamlModelFactory().createRamlMimeType();
 		String type;
@@ -121,7 +121,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 				RamlFormParameter formParameter = RamlModelFactoryOfFactories.createRamlModelFactory().createRamlFormParameter();
 				formParameter.setDisplayName(param.getName());
 				formParameter.setExample(param.getExample());
-				RamlParamType simpleType = SchemaHelper.mapSimpleType(param.getType());
+				RamlParamType simpleType = SchemaHelper.mapSimpleType(param.getType().getMaybeGenericClass());
 				formParameter.setType(simpleType == null ? RamlParamType.STRING : simpleType);
 				String description = parameterComments.get(param.getJavaName());
 				if (description == null) {
@@ -142,7 +142,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 			return new Pair<>(type, mimeType);
 		} else {
 			
-			return super.extractRequestBody(method, parameterComments, comment, apiParameters);
+			return super.extractRequestBody(holder, method, parameterComments, comment, apiParameters);
 		}
 	}
 
@@ -216,7 +216,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 	protected String extractExpectedMimeTypeFromMethod(Method method) {
 		RequestMapping requestMapping = getRequestMapping(method);
 		if (requestMapping != null) {
-			if (requestMapping.consumes() != null && requestMapping.consumes().length > 0) {
+			if (requestMapping.consumes().length > 0) {
 				return requestMapping.consumes()[0];
 			}
 		}
@@ -251,50 +251,20 @@ public class SpringMvcResourceParser extends ResourceParser {
 		return false;
 	}
 
-	protected String getParameterName(String preferredOption, String fallback) {
-		if (StringUtils.hasText(preferredOption)) {
-			return preferredOption;
-		} else {
-			return fallback;
-		}
-	}
-
-	/**
-	 * Checks if a parameter has any metadata that has been attached using the RequestParam data which identifies it as
-	 * an API request parameter
-	 * @param param The Parameter to be checked
-	 * @return If true the parameter should be added to the api
-	 */
-	protected boolean shouldAddParameter(Parameter param) {
-		for (Annotation annotation : param.getAnnotations()) {
-			if ((annotation.getClass().equals(RequestParam.class)) || (annotation.getClass().equals(RequestBody.class))
-					|| (annotation.getClass().equals(PathVariable.class))) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	@Override
-	protected List<ApiParameterMetadata> getApiParameters(Method method, boolean includeUrlParameters,
+	protected List<ApiParameterMetadata> getApiParameters(Class<?> clazz, Method method, boolean includeUrlParameters,
 			boolean includeNonUrlParameters) {
 		List<ApiParameterMetadata> params = new ArrayList<>();
 		for (Parameter param : method.getParameters()) {
 			boolean nonPathParameter = isNonPathParameter(param);
-			ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(param);
-			if (parameterMetadata != null) {
-				if (nonPathParameter && includeNonUrlParameters) {
-					params.add(parameterMetadata);
-				} else if (!nonPathParameter && includeUrlParameters) {
-					params.add(parameterMetadata);
-				}
-			}
+			ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(clazz, param);
+			if (nonPathParameter && includeNonUrlParameters) {
+                params.add(parameterMetadata);
+            } else if (!nonPathParameter && includeUrlParameters) {
+                params.add(parameterMetadata);
+            }
 		}
 		return params;
-	}
-
-	protected boolean isParameter(Parameter param) {
-		return isPathParameter(param) || isNonPathParameter(param);
 	}
 
 	protected boolean isPathParameter(Parameter param) {
@@ -333,11 +303,11 @@ public class SpringMvcResourceParser extends ResourceParser {
 	}
 
 	@Override
-	protected ApiParameterMetadata[] extractResourceIdParameter(Method method) {
+	protected ApiParameterMetadata[] extractResourceIdParameter(Class<?> clazz, Method method) {
 		Map<String, ApiParameterMetadata> pathVariables = new HashMap<>();
 		for (Parameter param : method.getParameters()) {
 			if (isPathParameter(param)) {
-				ApiParameterMetadata extractParameterMetadata = new ApiParameterMetadata(param);
+				ApiParameterMetadata extractParameterMetadata = new ApiParameterMetadata(clazz, param);
 				pathVariables.put(extractParameterMetadata.getName(), extractParameterMetadata);
 			}
 
@@ -354,22 +324,22 @@ public class SpringMvcResourceParser extends ResourceParser {
 		Controller classController = getAnnotation(method.getDeclaringClass(), Controller.class, false);
 
 		RequestMethod[] verbs = methodMapping.method();
-		if (verbs == null || verbs.length == 0) {
+		if (verbs.length == 0) {
 			verbs = RequestMethod.values();
 		}
 		String name = "";
 
-		if (classMapping != null && classMapping.value() != null && classMapping.value().length > 0) {
+		if (classMapping != null && classMapping.value().length > 0) {
 			name += NamingHelper.resolveProperties(classMapping.value()[0]);
 		}
-		if (classRestController != null && classRestController.value() != null) {
+		if (classRestController != null) {
 			name += NamingHelper.resolveProperties(classRestController.value());
 		}
-		if (classController != null && classController.value() != null) {
+		if (classController != null) {
 			name += NamingHelper.resolveProperties(classController.value());
 		}
 
-		if (methodMapping.value() != null && methodMapping.value().length > 0) {
+		if (methodMapping.value().length > 0) {
 			if (name.endsWith("/") && methodMapping.value()[0].startsWith("/")) {
 				name = name.substring(0, name.length() - 1);
 			} else if (name != "" && !name.endsWith("/") && !methodMapping.value()[0].startsWith("/")) {
@@ -392,7 +362,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 	}
 
 	@Override
-	protected boolean isActionOnResourceWithoutCommand(Method method) {
+	protected boolean isActionOnResourceWithoutCommand(Class<?> clazz, Method method) {
 		RequestMapping requestMapping = getRequestMapping(method);
 		if (requestMapping == null) {
 			return true;
@@ -406,9 +376,9 @@ public class SpringMvcResourceParser extends ResourceParser {
 				return true;
 			}
 			logger.debug("Parsing url: [" + url + "]");
-			List<ApiParameterMetadata> apiParameters = getApiParameters(method, true, false);
+			List<ApiParameterMetadata> apiParameters = getApiParameters(clazz, method, true, false);
 			for (ApiParameterMetadata parameterMetadata : apiParameters) {
-				url.replace(parameterMetadata.getName(), "");
+				url = url.replace(parameterMetadata.getName(), "");
 			}
 			url = url.replaceAll("[^\\w]", "");
 			if (StringUtils.hasText(url)) {
@@ -446,16 +416,16 @@ public class SpringMvcResourceParser extends ResourceParser {
 			logger.info("Added call: " + apiName + " " +apiAction  + " from method: " + method.getName()  );
 
 			String responseComment = docEntry == null ? null : docEntry.getReturnTypeComment();
-			RamlResponse response = extractResponseFromMethod(method, responseComment);
+			RamlResponse response = extractResponseFromMethod(clazz, method, responseComment);
 			Map<String, String> parameterComments = (docEntry == null ? Collections.emptyMap() : docEntry
 					.getParameterComments());
 			// Lets extract any query parameters (for Verbs that don't support bodies) and insert them in the Action
 			// model
-			action.addQueryParameters(extractQueryParameters(apiAction, method, parameterComments));
+			action.addQueryParameters(extractQueryParameters(apiAction, clazz, method, parameterComments));
 
 			// Lets extract any request data that should go in the request body as json and insert it in the action
 			// model
-			action.setBody(extractRequestBodyFromMethod(apiAction, method, parameterComments));
+			action.setBody(extractRequestBodyFromMethod(apiAction, clazz, method, parameterComments));
 			// Add any headers we need for the method
 			addHeadersForMethod(action, apiAction, method);
 
@@ -469,7 +439,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 
 			RamlResource idResource = null;
 			RamlResource leafResource = null;
-			ApiParameterMetadata[] resourceIdParameters = extractResourceIdParameter(method);
+			ApiParameterMetadata[] resourceIdParameters = extractResourceIdParameter(clazz, method);
 			Map<String, ApiParameterMetadata> resourceIdParameterMap = new HashMap<>();
 			for (ApiParameterMetadata apiParameterMetadata : resourceIdParameters) {
 				resourceIdParameterMap.put("{" + apiParameterMetadata.getName() + "}", apiParameterMetadata);
@@ -503,7 +473,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 								+ StringUtils.capitalize(partialUrl).replace("{", "").replace("}", "");
 						ApiParameterMetadata resourceIdParameter = resourceIdParameterMap.get(partialUrl);
 						RamlUriParameter uriParameter = ramlModelFactory.createRamlUriParameterWithName(resourceIdParameter.getName());
-						RamlParamType simpleType = SchemaHelper.mapSimpleType(resourceIdParameter.getType());
+						RamlParamType simpleType = SchemaHelper.mapSimpleType(resourceIdParameter.getType().getMaybeGenericClass());
 						if (simpleType == null) {
 							logger.warn("Only simple parameters are supported for URL Parameters, defaulting " + resourceIdParameter.getType() + " to String");
 							simpleType = RamlParamType.STRING;

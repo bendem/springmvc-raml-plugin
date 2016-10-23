@@ -16,24 +16,13 @@ package com.phoenixnap.oss.ramlapisync.naming;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
-import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.net.URI;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.TreeMap;
 
 import org.apache.commons.io.IOUtils;
-import org.jsonschema2pojo.Annotator;
-import org.jsonschema2pojo.DefaultGenerationConfig;
-import org.jsonschema2pojo.GenerationConfig;
-import org.jsonschema2pojo.Jackson2Annotator;
-import org.jsonschema2pojo.SchemaGenerator;
-import org.jsonschema2pojo.SchemaMapper;
-import org.jsonschema2pojo.SchemaStore;
+import org.jsonschema2pojo.*;
 import org.jsonschema2pojo.rules.RuleFactory;
 import org.raml.parser.utils.Inflector;
 import org.slf4j.Logger;
@@ -55,16 +44,9 @@ import com.phoenixnap.oss.ramlapisync.data.ApiBodyMetadata;
 import com.phoenixnap.oss.ramlapisync.data.ApiParameterMetadata;
 import com.phoenixnap.oss.ramlapisync.javadoc.JavaDocEntry;
 import com.phoenixnap.oss.ramlapisync.javadoc.JavaDocStore;
-import com.phoenixnap.oss.ramlapisync.raml.RamlMimeType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlModelFactory;
-import com.phoenixnap.oss.ramlapisync.raml.RamlModelFactoryOfFactories;
-import com.phoenixnap.oss.ramlapisync.raml.RamlParamType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlQueryParameter;
-import com.phoenixnap.oss.ramlapisync.raml.RamlRoot;
+import com.phoenixnap.oss.ramlapisync.raml.*;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JPackage;
-
-
 
 /**
  * Class containing convenience methods relating to the extracting of information from Java types
@@ -92,10 +74,10 @@ public class SchemaHelper {
      *            The associated Javadoc if any
      * @return A map of query parameters that map into the supplied type
      */
-    public static Map<String, RamlQueryParameter> convertParameterToQueryParameter(final Parameter param,
+    public static Map<String, RamlQueryParameter> convertParameterToQueryParameter(Class<?> clazz, final Parameter param,
             final String paramComment) {
         RamlQueryParameter queryParam = RamlModelFactoryOfFactories.createRamlModelFactory().createRamlQueryParameter();
-        ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(param);
+        ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(clazz, param);
 
         RamlParamType type = mapSimpleType(param.getType());
 
@@ -121,7 +103,6 @@ public class SchemaHelper {
         return Collections.singletonMap(parameterMetadata.getName(), queryParam);
     }
 
-
     /**
      * Utility method that will return a schema if the identifier is valid and exists in the raml
      * file definition.
@@ -146,7 +127,6 @@ public class SchemaHelper {
         return null;
     }
 
-
     /**
      * Breaks down a class into component fields which are mapped as Query Parameters. If Javadoc is
      * supplied, this will
@@ -158,14 +138,14 @@ public class SchemaHelper {
      *            The associated JavaDoc (if any)
      * @return a Map of Parameter RAML models keyed by parameter name
      */
-    public static Map<String, RamlQueryParameter> convertClassToQueryParameters(final Parameter param,
+    public static Map<String, RamlQueryParameter> convertClassToQueryParameters(Class<?> clazz, final Parameter param,
             final JavaDocStore javaDocStore) {
         final Map<String, RamlQueryParameter> outParams = new TreeMap<>();
 
         if (param == null || param.equals(Void.class)) {
             return outParams;
         }
-        final ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(param);
+        final ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(clazz, param);
 
         if (mapSimpleType(param.getType()) != null) {
             throw new IllegalArgumentException(
@@ -208,7 +188,6 @@ public class SchemaHelper {
         }
     }
 
-
     /**
      * Uses Jackson object mappers to convert an ajaxcommandparameter annotated type into its
      * JSONSchema representation.
@@ -224,24 +203,12 @@ public class SchemaHelper {
      */
     public static String convertClassToJsonSchema(ApiParameterMetadata clazz, String responseDescription,
             JavaDocStore javaDocStore) {
-        if (clazz == null || clazz.equals(Void.class)) {
+        if (clazz == null) {
             return "{}";
         }
-        try {
-            ObjectMapper m = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-            JsonSchema jsonSchema = extractSchemaInternal(clazz.getType(), clazz.getGenericType(), responseDescription,
-                    javaDocStore, m);
-
-            return m.writerWithDefaultPrettyPrinter().writeValueAsString(jsonSchema);
-        }
-        catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        return convertClassToJsonSchema(clazz.getType(), responseDescription, javaDocStore);
     }
-
 
     /**
      * Uses Jackson object mappers to convert a Pojo into its JSONSchema representation. If Javadoc
@@ -256,14 +223,17 @@ public class SchemaHelper {
      *            Associated JavaDoc for this class that can be embedded in the schema
      * @return Json Schema representing the class in string format
      */
-    public static String convertClassToJsonSchema(Type clazz, String responseDescription, JavaDocStore javaDocStore) {
-        if (clazz == null || clazz.equals(Void.class)) {
+    public static String convertClassToJsonSchema(Reflection.MaybeGenericClass<?> clazz, String responseDescription, JavaDocStore javaDocStore) {
+        if (clazz == null || clazz.getMaybeGenericClass() == Void.class || clazz.getMaybeGenericClass() == void.class) {
             return "{}";
         }
         try {
-            ObjectMapper m = new ObjectMapper();
-            JsonSchema jsonSchema = extractSchemaInternal(clazz, TypeHelper.inferGenericType(clazz),
-                    responseDescription, javaDocStore, m);
+            ObjectMapper m = new ObjectMapper()
+                    .registerModule(new JavaTimeModule())
+                    .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+            JsonSchema jsonSchema = extractSchemaInternal(clazz, responseDescription, javaDocStore, m);
+            logger.info("======= " + clazz);
 
             return m.writerWithDefaultPrettyPrinter().writeValueAsString(jsonSchema);
         }
@@ -272,25 +242,23 @@ public class SchemaHelper {
         }
     }
 
+    private static void acceptJsonFormatVisitor(ObjectMapper m, Reflection.MaybeGenericClass<?> clazz, SchemaFactoryWrapper visitor)
+            throws JsonMappingException {
+        m.acceptJsonFormatVisitor(clazz.getMaybeGenericClass(), visitor);
+        if (!clazz.isGeneric()) {
+            return;
+        }
 
-    private static JsonSchema extractSchemaInternal(Type clazz, Type genericType, String responseDescription,
-            JavaDocStore javaDocStore, ObjectMapper m)
+        for (Reflection.MaybeGenericClass<?> maybeGenericClass : ((Reflection.GenericClass<?>) clazz).getTypeParameters()) {
+            acceptJsonFormatVisitor(m, maybeGenericClass, visitor);
+        }
+    }
+
+    private static JsonSchema extractSchemaInternal(Reflection.MaybeGenericClass<?> clazz, String responseDescription,
+                                                    JavaDocStore javaDocStore, ObjectMapper m)
             throws JsonMappingException {
         SchemaFactoryWrapper visitor = new SchemaFactoryWrapper();
-        if (genericType != null) {
-            try {
-                m.acceptJsonFormatVisitor(m.constructType(genericType), visitor);
-            }
-            catch (Exception ex) {
-                logger.error("Unable to add JSON visitor for " + genericType.toString());
-            }
-        }
-        try {
-            m.acceptJsonFormatVisitor(m.constructType(clazz), visitor);
-        }
-        catch (Exception ex) {
-            logger.error("Unable to add JSON visitor for " + clazz.toString());
-        }
+        acceptJsonFormatVisitor(m, clazz, visitor);
 
         JsonSchema jsonSchema = visitor.finalSchema();
         if (jsonSchema instanceof ObjectSchema && javaDocStore != null) {
@@ -308,11 +276,10 @@ public class SchemaHelper {
             ValueTypeSchema valueTypeSchema = (ValueTypeSchema) jsonSchema;
             valueTypeSchema.setDescription(responseDescription);
         }
-        else if (jsonSchema instanceof ArraySchema && genericType != null) {
+        else if (jsonSchema instanceof ArraySchema && clazz.isGeneric()) {
             ArraySchema arraySchema = (ArraySchema) jsonSchema;
-            arraySchema.setItemsSchema(extractSchemaInternal(genericType, TypeHelper.inferGenericType(genericType),
+            arraySchema.setItemsSchema(extractSchemaInternal(clazz,
                     responseDescription, javaDocStore, m));
-
         }
         return jsonSchema;
     }

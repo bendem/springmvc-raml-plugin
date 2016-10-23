@@ -17,27 +17,17 @@ import com.phoenixnap.oss.ramlapisync.javadoc.JavaDocEntry;
 import com.phoenixnap.oss.ramlapisync.javadoc.JavaDocExtractor;
 import com.phoenixnap.oss.ramlapisync.javadoc.JavaDocStore;
 import com.phoenixnap.oss.ramlapisync.naming.Pair;
+import com.phoenixnap.oss.ramlapisync.naming.Reflection;
 import com.phoenixnap.oss.ramlapisync.naming.SchemaHelper;
-import com.phoenixnap.oss.ramlapisync.naming.TypeHelper;
-import com.phoenixnap.oss.ramlapisync.raml.RamlAction;
-import com.phoenixnap.oss.ramlapisync.raml.RamlActionType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlMimeType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlModelFactory;
-import com.phoenixnap.oss.ramlapisync.raml.RamlModelFactoryOfFactories;
-import com.phoenixnap.oss.ramlapisync.raml.RamlParamType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlQueryParameter;
-import com.phoenixnap.oss.ramlapisync.raml.RamlResource;
-import com.phoenixnap.oss.ramlapisync.raml.RamlResponse;
+import com.phoenixnap.oss.ramlapisync.raml.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
-import org.springframework.web.context.request.async.DeferredResult;
 
 import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.lang.reflect.Type;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -134,7 +124,7 @@ public abstract class ResourceParser {
 	 * @param parameterComments The parameter comments associated with these parameters
 	 * @return A collection of parameters keyed by name
 	 */
-	protected Map<String, RamlQueryParameter> extractQueryParameters(RamlActionType apiAction, Method method,
+	protected Map<String, RamlQueryParameter> extractQueryParameters(RamlActionType apiAction, Class<?> clazz, Method method,
 																	 Map<String, String> parameterComments) {
 		// Since POST requests have a body we choose to keep all request data in one place as much as possible
 		if (Arrays.asList(RamlActionType.POST, RamlActionType.PUT, RamlActionType.PATCH).contains(apiAction) || method.getParameterCount() == 0) {
@@ -148,12 +138,12 @@ public abstract class ResourceParser {
 				RamlParamType simpleType = SchemaHelper.mapSimpleType(param.getType());
 
 				if (simpleType == null) {
-					queryParams.putAll(SchemaHelper.convertClassToQueryParameters(param,
+					queryParams.putAll(SchemaHelper.convertClassToQueryParameters(clazz, param,
 							javaDocs.getJavaDoc(param.getType())));
 				} else {
 					// Check if we have comments
 					String paramComment = parameterComments.get(param.getName());
-					queryParams.putAll(SchemaHelper.convertParameterToQueryParameter(param, paramComment));
+					queryParams.putAll(SchemaHelper.convertParameterToQueryParameter(clazz, param, paramComment));
 				}
 			}
 		}
@@ -175,7 +165,7 @@ public abstract class ResourceParser {
 	 * @param includeNonUrlParameters If true this will include query and body params
 	 * @return A list of request parameters for this API
 	 */
-	protected abstract List<ApiParameterMetadata> getApiParameters(Method method, boolean includeUrlParameters,
+	protected abstract List<ApiParameterMetadata> getApiParameters(Class<?> clazz, Method method, boolean includeUrlParameters,
 			boolean includeNonUrlParameters);
 
 	/**
@@ -187,20 +177,20 @@ public abstract class ResourceParser {
 	 * @param parameterComments The parameter comments associated with these parameters
 	 * @return A map of supported mime types for the request
 	 */
-	protected Map<String, RamlMimeType> extractRequestBodyFromMethod(RamlActionType apiAction, Method method,
+	protected Map<String, RamlMimeType> extractRequestBodyFromMethod(RamlActionType apiAction, Class<?> holder, Method method,
 			Map<String, String> parameterComments) {
 
 		if (!(doesActionTypeSupportRequestBody(apiAction)) || method.getParameterCount() == 0) {
 			return Collections.emptyMap();
 		}
 
-		String comment = null;
-		List<ApiParameterMetadata> apiParameters = getApiParameters(method, false, true);
+		List<ApiParameterMetadata> apiParameters = getApiParameters(holder, method, false, true);
+		logger.info("====== " + apiParameters.size());
 		if (apiParameters.size() == 0) {
 			//We only have url params it seems
 			return Collections.emptyMap();
 		}
-		Pair<String, RamlMimeType> schemaAndMime = extractRequestBody(method, parameterComments, comment, apiParameters);
+		Pair<String, RamlMimeType> schemaAndMime = extractRequestBody(holder, method, parameterComments, null, apiParameters);
 
 		return Collections.singletonMap(schemaAndMime.getFirst(), schemaAndMime.getSecond());
 	}
@@ -215,7 +205,7 @@ public abstract class ResourceParser {
 	 * @param apiParameters The Parameters identifed from this method
 	 * @return The Request Body as a schema and the associated mime type
 	 */
-	protected Pair<String, RamlMimeType> extractRequestBody(Method method, Map<String, String> parameterComments,
+	protected Pair<String, RamlMimeType> extractRequestBody(Class<?> holder, Method method, Map<String, String> parameterComments,
 			String comment, List<ApiParameterMetadata> apiParameters) {
 		String schema;
 		RamlMimeType mimeType = RamlModelFactoryOfFactories.createRamlModelFactory().createRamlMimeType();
@@ -225,7 +215,7 @@ public abstract class ResourceParser {
 			}
 			ApiParameterMetadata ajaxParameter = apiParameters.get(0);
 			schema = SchemaHelper.convertClassToJsonSchema(ajaxParameter, comment,
-					javaDocs.getJavaDoc(ajaxParameter.getType()));
+					javaDocs.getJavaDoc(ajaxParameter.getType().getMaybeGenericClass()));
 			if (StringUtils.hasText(ajaxParameter.getExample())) {
 				mimeType.setExample(ajaxParameter.getExample());
 			}
@@ -245,7 +235,7 @@ public abstract class ResourceParser {
 						comment = parameterComments.get(param.getJavaName());
 					}
 				}
-				schema += SchemaHelper.convertClassToJsonSchema(param, comment, javaDocs.getJavaDoc(param.getType()));
+				schema += SchemaHelper.convertClassToJsonSchema(param, comment, javaDocs.getJavaDoc(param.getType().getMaybeGenericClass()));
 			}
 
 			schema += "}\n}";
@@ -268,7 +258,7 @@ public abstract class ResourceParser {
 	 * @param method The Method to be inspected
 	 * @return A list of parameters that are exposed in the API 
 	 */
-	protected abstract ApiParameterMetadata[] extractResourceIdParameter(Method method);
+	protected abstract ApiParameterMetadata[] extractResourceIdParameter(Class<?> clazz, Method method);
 
 	/**
 	 * Extracts the http method (verb) as well as the name of the api call
@@ -296,7 +286,7 @@ public abstract class ResourceParser {
 	 * @param method The method to check
 	 * @return If true then this is an Action/Verb on a resource collection
 	 */
-	protected abstract boolean isActionOnResourceWithoutCommand(Method method);
+	protected abstract boolean isActionOnResourceWithoutCommand(Class<?> clazz, Method method);
 
 	/**
 	 * Checks the annotations and return type that the method returns and the mime it corresponds to
@@ -320,11 +310,13 @@ public abstract class ResourceParser {
 	/**
 	 * Extracts the Response Body from a method in JsonSchema Format and embeds it into a response object based on the
 	 * defaultMediaType
+	 *
+	 * @param clazz
 	 * @param method The method to inspect
 	 * @param responseComment The JavaDoc (if any) for this response
 	 * @return The response RAML model for this method (success only)
 	 */
-	protected RamlResponse extractResponseFromMethod(Method method, String responseComment) {
+	protected RamlResponse extractResponseFromMethod(Class<?> clazz, Method method, String responseComment) {
 		RamlModelFactory ramlModelFactory = RamlModelFactoryOfFactories.createRamlModelFactory();
 		RamlResponse response = ramlModelFactory.createRamlResponse();
 		String mime = extractMimeTypeFromMethod(method);
@@ -332,20 +324,13 @@ public abstract class ResourceParser {
 												// TO/VO/DO/weO with the mime type
 												// they represent and chuck it in here
 		Class<?> returnType = method.getReturnType();
-		Type genericReturnType = method.getGenericReturnType();
-		Type inferGenericType = TypeHelper.inferGenericType(genericReturnType);
-		if (returnType != null && (returnType.equals(DeferredResult.class) || returnType.equals(ResponseEntity.class))) { //unwrap spring classes from response body
-			if (inferGenericType == null) {
-				inferGenericType = Object.class;
-			}
+		Reflection.MaybeGenericClass<?> resolvedType = Reflection.resolve(clazz, method.getGenericReturnType());
 
-			if( inferGenericType instanceof Class) {
-				returnType = (Class<?>) inferGenericType;
-			}
-			genericReturnType = inferGenericType;
+		if (resolvedType.getMaybeGenericClass().equals(ResponseEntity.class)) { // unwrap org.springframework.http.RequestEntity
+			resolvedType = ((Reflection.GenericClass<?>) resolvedType).getTypeParameters().get(0);
 		}
 
-		jsonType.setSchema(SchemaHelper.convertClassToJsonSchema(genericReturnType, responseComment,
+		jsonType.setSchema(SchemaHelper.convertClassToJsonSchema(resolvedType, responseComment,
 				javaDocs.getJavaDoc(returnType)));
 
 		LinkedHashMap<String, RamlMimeType> body = new LinkedHashMap<>();

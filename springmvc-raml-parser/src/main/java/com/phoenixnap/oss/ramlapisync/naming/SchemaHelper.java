@@ -114,7 +114,7 @@ public class SchemaHelper {
      * @return The full schema if contained in the raml document or null if not found
      */
     public static String resolveSchema(String schema, RamlRoot document) {
-        if (document == null || schema == null || schema.indexOf("{") != -1) {
+        if (document == null || schema == null || schema.contains("{")) {
             return null;
         }
         if (document.getSchemas() != null && !document.getSchemas().isEmpty()) {
@@ -142,7 +142,7 @@ public class SchemaHelper {
             final JavaDocStore javaDocStore) {
         final Map<String, RamlQueryParameter> outParams = new TreeMap<>();
 
-        if (param == null || param.equals(Void.class)) {
+        if (param == null || param.getType().equals(Void.class)) {
             return outParams;
         }
         final ApiParameterMetadata parameterMetadata = new ApiParameterMetadata(clazz, param);
@@ -233,7 +233,6 @@ public class SchemaHelper {
                     .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
             JsonSchema jsonSchema = extractSchemaInternal(clazz, responseDescription, javaDocStore, m);
-            logger.info("======= " + clazz);
 
             return m.writerWithDefaultPrettyPrinter().writeValueAsString(jsonSchema);
         }

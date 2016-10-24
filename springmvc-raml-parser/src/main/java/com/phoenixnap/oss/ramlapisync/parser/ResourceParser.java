@@ -185,7 +185,6 @@ public abstract class ResourceParser {
 		}
 
 		List<ApiParameterMetadata> apiParameters = getApiParameters(holder, method, false, true);
-		logger.info("====== " + apiParameters.size());
 		if (apiParameters.size() == 0) {
 			//We only have url params it seems
 			return Collections.emptyMap();

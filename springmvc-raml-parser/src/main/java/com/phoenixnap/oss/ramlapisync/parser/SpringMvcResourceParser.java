@@ -16,25 +16,15 @@ import java.io.File;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.TreeMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,15 +39,7 @@ import com.phoenixnap.oss.ramlapisync.naming.NamingHelper;
 import com.phoenixnap.oss.ramlapisync.naming.Pair;
 import com.phoenixnap.oss.ramlapisync.naming.RamlHelper;
 import com.phoenixnap.oss.ramlapisync.naming.SchemaHelper;
-import com.phoenixnap.oss.ramlapisync.raml.RamlAction;
-import com.phoenixnap.oss.ramlapisync.raml.RamlActionType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlMimeType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlModelFactory;
-import com.phoenixnap.oss.ramlapisync.raml.RamlModelFactoryOfFactories;
-import com.phoenixnap.oss.ramlapisync.raml.RamlParamType;
-import com.phoenixnap.oss.ramlapisync.raml.RamlResource;
-import com.phoenixnap.oss.ramlapisync.raml.RamlResponse;
-import com.phoenixnap.oss.ramlapisync.raml.RamlUriParameter;
+import com.phoenixnap.oss.ramlapisync.raml.*;
 
 /**
  * Service scanner that handles generation from a Spring MVC codebase

@@ -206,7 +206,14 @@ public class SpringMvcResourceParser extends ResourceParser {
 	}
 
 	@Override
-	protected boolean shouldAddMethodToApi(Method method) {
+	protected boolean shouldAddMethodToApi(Class<?> clazz, Method method) {
+		if (method.getDeclaringClass() != clazz) {
+			try {
+				clazz.getMethod(method.getName(), method.getParameterTypes());
+				return false; // method is overridden, the more concrete implementation will be added
+			} catch (NoSuchMethodException e) {}
+		}
+
 		RequestMapping requestMapping = getRequestMapping(method);
 		if (requestMapping != null) {
 			if (restrictOnMediaType) {
@@ -395,7 +402,7 @@ public class SpringMvcResourceParser extends ResourceParser {
 				apiName = "/" + apiName;
 			}
 			Map<String, String> pathDescriptions = getPathDescriptionsForMethod(method);
-			logger.info("Added call: " + apiName + " " +apiAction  + " from method: " + method.getName()  );
+			logger.info("Adding call: " + apiName + " " + apiAction  + " from method: " + method.getName()  );
 
 			String responseComment = docEntry == null ? null : docEntry.getReturnTypeComment();
 			RamlResponse response = extractResponseFromMethod(clazz, method, responseComment);

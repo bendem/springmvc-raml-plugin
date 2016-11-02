@@ -72,7 +72,7 @@ public abstract class ResourceParser {
 	private void getMethodsFromService(Class<?> clazz, JavaDocStore javaDoc, RamlResource parentResource) {
 		try {
 			for (Method method : clazz.getMethods()) {
-				if (!IGNORE_METHOD_REGEX.matcher(method.getName()).matches() && shouldAddMethodToApi(method)) {
+				if (!IGNORE_METHOD_REGEX.matcher(method.getName()).matches() && shouldAddMethodToApi(clazz, method)) {
 					extractAndAppendResourceInfo(clazz, method, javaDoc.getJavaDoc(method), parentResource);
 				}
 			}
@@ -114,7 +114,7 @@ public abstract class ResourceParser {
 	 * @param method The method to inspect
 	 * @return If true the method is annotated in such a way that it should be included in the raml
 	 */
-	protected abstract boolean shouldAddMethodToApi(Method method);
+	protected abstract boolean shouldAddMethodToApi(Class<?> clazz, Method method);
 
 	/**
 	 * Extracts parameters from a method call and attaches these with the comments extracted from the javadoc
@@ -326,7 +326,12 @@ public abstract class ResourceParser {
 		Reflection.MaybeGenericClass<?> resolvedType = Reflection.resolve(clazz, method.getGenericReturnType());
 
 		if (resolvedType.getMaybeGenericClass().equals(ResponseEntity.class)) { // unwrap org.springframework.http.RequestEntity
-			resolvedType = ((Reflection.GenericClass<?>) resolvedType).getTypeParameters().get(0);
+			if (resolvedType.isGeneric()) {
+				resolvedType = ((Reflection.GenericClass<?>) resolvedType).getTypeParameters().get(0);
+			} else {
+				logger.warn("Couldn't resolve type of " + ResponseEntity.class.getSimpleName() + " for method " + method);
+				resolvedType = new Reflection.NonGenericClass<>(Object.class);
+			}
 		}
 
 		jsonType.setSchema(SchemaHelper.convertClassToJsonSchema(resolvedType, responseComment,

@@ -206,12 +206,9 @@ public class SpringMvcResourceParser extends ResourceParser {
 	}
 
 	@Override
-	protected boolean shouldAddMethodToApi(Class<?> clazz, Method method) {
-		if (method.getDeclaringClass() != clazz) {
-			try {
-				clazz.getMethod(method.getName(), method.getParameterTypes());
-				return false; // method is overridden, the more concrete implementation will be added
-			} catch (NoSuchMethodException e) {}
+	protected boolean shouldAddMethodToApi(Method method) {
+		if (method.isSynthetic()) {
+			return false;
 		}
 
 		RequestMapping requestMapping = getRequestMapping(method);

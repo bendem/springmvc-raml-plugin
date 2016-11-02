@@ -72,7 +72,7 @@ public abstract class ResourceParser {
 	private void getMethodsFromService(Class<?> clazz, JavaDocStore javaDoc, RamlResource parentResource) {
 		try {
 			for (Method method : clazz.getMethods()) {
-				if (!IGNORE_METHOD_REGEX.matcher(method.getName()).matches() && shouldAddMethodToApi(clazz, method)) {
+				if (!IGNORE_METHOD_REGEX.matcher(method.getName()).matches() && shouldAddMethodToApi(method)) {
 					extractAndAppendResourceInfo(clazz, method, javaDoc.getJavaDoc(method), parentResource);
 				}
 			}
@@ -114,7 +114,7 @@ public abstract class ResourceParser {
 	 * @param method The method to inspect
 	 * @return If true the method is annotated in such a way that it should be included in the raml
 	 */
-	protected abstract boolean shouldAddMethodToApi(Class<?> clazz, Method method);
+	protected abstract boolean shouldAddMethodToApi(Method method);
 
 	/**
 	 * Extracts parameters from a method call and attaches these with the comments extracted from the javadoc

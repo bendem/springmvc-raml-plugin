@@ -68,7 +68,7 @@ public class SchemaHelperTest {
 
 	@Test
 	public void test_convertClassToQueryParameters_emptyOrVoid() {
-		assertEquals("Expect empty Map", 0, SchemaHelper.convertClassToQueryParameters(null, null).size());
+		assertEquals("Expect empty Map", 0, SchemaHelper.convertClassToQueryParameters(null, null, null).size());
 	}
 
 	@Test
@@ -76,7 +76,8 @@ public class SchemaHelperTest {
 		String methodName = "testMethod_with_boxedPrimitive";
 		String comment = "testComment";
 		Map<String, RamlQueryParameter> queryParameters = SchemaHelper.convertParameterToQueryParameter(
-				getParameterFromSampleMethod(methodName, 0), comment);
+			SchemaHelperTest.class,
+			getParameterFromSampleMethod(methodName, 0), comment);
 		assertEquals("Expect Map with 1 Elements", 1, queryParameters.size());
 		RamlQueryParameter queryParameter = queryParameters.values().iterator().next();
 		validateQueryParameter(queryParameter, "boxedPrimitive", RamlParamType.INTEGER);
@@ -88,6 +89,7 @@ public class SchemaHelperTest {
 	public void test_convertParameterToQueryParameter_primitive() {
 		String methodName = "testMethod_with_primitive";
 		Map<String, RamlQueryParameter> queryParameters = SchemaHelper.convertParameterToQueryParameter(
+				SchemaHelperTest.class,
 				getParameterFromSampleMethod(methodName, 0), null);
 		assertEquals("Expect Map with 1 Elements", 1, queryParameters.size());
 		RamlQueryParameter queryParameter = queryParameters.values().iterator().next();
@@ -98,13 +100,17 @@ public class SchemaHelperTest {
 	@Test(expected = IllegalArgumentException.class)
 	public void test_convertParameterToQueryParameter_classWith3Elements() {
 		String methodName = "testMethod_with_classWith3Elements";
-		SchemaHelper.convertParameterToQueryParameter(getParameterFromSampleMethod(methodName, 0), null);
+		SchemaHelper.convertParameterToQueryParameter(
+			SchemaHelperTest.class,
+			getParameterFromSampleMethod(methodName, 0), null);
 	}
 
 	@Test(expected = IllegalArgumentException.class)
 	public void test_convertClassToQueryParameters_boxedPrimitive() {
 		String methodName = "testMethod_with_boxedPrimitive";
-		SchemaHelper.convertClassToQueryParameters(getParameterFromSampleMethod(methodName, 0), null);
+		SchemaHelper.convertClassToQueryParameters(
+			SchemaHelperTest.class,
+			getParameterFromSampleMethod(methodName, 0), null);
 	}
 
 	@Test
@@ -112,7 +118,8 @@ public class SchemaHelperTest {
 		String methodName = "testMethod_with_classWith3Elements";
 		RamlQueryParameter queryParameter;
 		Map<String, RamlQueryParameter> queryParameters = SchemaHelper.convertClassToQueryParameters(
-				getParameterFromSampleMethod(methodName, 0), null);
+			SchemaHelperTest.class,
+			getParameterFromSampleMethod(methodName, 0), null);
 		assertEquals("Expect Map with three Elements", 3, queryParameters.size());
 		Iterator<RamlQueryParameter> qpIterator = queryParameters.values().iterator();
 		queryParameter = qpIterator.next();

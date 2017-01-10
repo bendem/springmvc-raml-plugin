@@ -50,7 +50,7 @@ public class BugfixTest {
 		assertEquals("Expect 1 request parameter", 1, apiCall.getRequestParameters().size());
 		ApiParameterMetadata parameter = apiCall.getRequestParameters().iterator().next();
 		assertEquals("Expect it to be the id", "id", parameter.getName());
-		assertEquals("Expect it to be the id", String.class, parameter.getType());
+		assertEquals("Expect it to be the id", String.class, parameter.getType().getMaybeGenericClass());
 		
 	}
 

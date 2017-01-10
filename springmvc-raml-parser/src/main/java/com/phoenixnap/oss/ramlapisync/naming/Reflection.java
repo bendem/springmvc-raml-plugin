@@ -4,6 +4,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -85,7 +86,8 @@ public class Reflection {
             return resolve(holder, (TypeVariable<?>) type);
         }
 
-        throw new TypeResolutionException("couldn't resolve type");
+        // erased or wildcard
+        return new GenericClass<>(holder, Collections.singletonList(new NonGenericClass<>(Object.class)));
     }
 
     public static GenericClass<?> resolve(Class<?> holder, ParameterizedType type) {
